@@ -12,11 +12,6 @@ import java.util.Calendar;
 
 public class LogEvent implements RequestHandler<SNSEvent, Object> {
 
-    public static void main(String[] args) throws UnirestException {
-
-    }
-
-
     public Object handleRequest(SNSEvent request, Context context) {
         final String postUrl;
         final String messageText;
