@@ -3,54 +3,61 @@ package uk.gov.lambda.updater;
 import com.amazonaws.services.lambda.runtime.Context;
 import com.amazonaws.services.lambda.runtime.RequestHandler;
 import com.amazonaws.services.lambda.runtime.events.SNSEvent;
+import com.mashape.unirest.http.HttpResponse;
+import com.mashape.unirest.http.Unirest;
+import com.mashape.unirest.http.exceptions.UnirestException;
 
-import java.io.IOException;
-import java.io.UnsupportedEncodingException;
 import java.text.SimpleDateFormat;
 import java.util.Calendar;
 
-import org.apache.http.HttpEntity;
-import org.apache.http.HttpResponse;
-import org.apache.http.client.HttpClient;
-import org.apache.http.client.methods.HttpPost;
-import org.apache.http.entity.StringEntity;
-import org.apache.http.impl.client.HttpClientBuilder;
-import com.google.gson.Gson;
-
 public class LogEvent implements RequestHandler<SNSEvent, Object> {
 
+    public static void main(String[] args) throws UnirestException {
+
+    }
+
+
     public Object handleRequest(SNSEvent request, Context context) {
+        final String postUrl;
+        final String messageText;
         String timeStamp = new SimpleDateFormat("yyyy-MM-dd_HH:mm:ss").format(Calendar.getInstance().getTime());
+
         context.getLogger().log("Invocation started: " + timeStamp);
 
-        class SlackJson {
-            String text = request.getRecords().get(0).getSNS().getMessage();
-        }
-        SlackJson slackJson = new SlackJson();
+        postUrl = System.getenv("HOOK_URL");
+        context.getLogger().log("[DEBUG] URL: " + postUrl);
+        messageText = request.getRecords().get(0).getSNS().getMessage();
 
-        String postUrl = System.getenv("HOOK_URL");// put in your url
-        context.getLogger().log(postUrl);
-        Gson gson = new Gson();
-        HttpClient httpClient = HttpClientBuilder.create().build();
-        HttpPost post = new HttpPost(postUrl);
-        StringEntity postingString = null;//gson.tojson() converts your pojo to json
-        try {
-            postingString = new StringEntity(gson.toJson(slackJson));
-        } catch (UnsupportedEncodingException e) {
-            context.getLogger().log(e.getMessage() + 'IN ');
-        }
-        post.setEntity(postingString);
-        post.setHeader("Content-type", "application/json");
-        try {
-            HttpResponse response = httpClient.execute(post);
-        } catch (IOException e) {
-            context.getLogger().log(e.getMessage());
-        }
+        context.getLogger().log("[DEBUG] Message to be sent: " + messageText);
 
-        context.getLogger().log(request.getRecords().get(0).getSNS().getMessage());
+        try {
+            String tmpMessage = messageText.replace("{", "")
+                    .replace("\"", "")
+                    .replace(",", ", ")
+                    .replace(":", ": ")
+                    .replace("}", "")
+                    // country registers to URL
+                    .replace("registerName: country", "*registerName*: <https://country.register.gov.uk/|country>")
+                    // payload bold
+                    .replace("payload", "\\n*payload*")
+                    .replace("add-item", "\\nadd-item")
+                    .replace("append-entry", "\\nappend-entry");
+
+            context.getLogger().log("[DEBUG] tmpMessage: " + tmpMessage);
+
+            final HttpResponse<String> httpResponse = Unirest.post(postUrl)
+                    .header("accept", "application/json")
+                    .body("{\"text\":\"" + tmpMessage + "\", \"username\": \"updater-bot\", \"icon_emoji\": \":japanese_ogre:\"}")
+                    .asString();
+
+            context.getLogger().log("[INFO] Response status: " + httpResponse.getStatus());
+        } catch (UnirestException e) {
+            context.getLogger().log("[ERROR] Doing the call: " + e.getMessage());
+        }
 
         timeStamp = new SimpleDateFormat("yyyy-MM-dd_HH:mm:ss").format(Calendar.getInstance().getTime());
         context.getLogger().log("Invocation completed: " + timeStamp);
+
         return null;
     }
 }
