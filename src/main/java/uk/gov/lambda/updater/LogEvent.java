@@ -1,5 +1,13 @@
 package uk.gov.lambda.updater;
 
+import com.amazonaws.auth.AWSCredentials;
+import com.amazonaws.auth.DefaultAWSCredentialsProviderChain;
+import com.amazonaws.auth.EnvironmentVariableCredentialsProvider;
+import com.amazonaws.regions.Region;
+import com.amazonaws.regions.Regions;
+import com.amazonaws.services.cloudfront.AmazonCloudFrontClient;
+import com.amazonaws.services.cloudfront.AmazonCloudFrontClientBuilder;
+import com.amazonaws.services.cloudfront.model.*;
 import com.amazonaws.services.lambda.runtime.Context;
 import com.amazonaws.services.lambda.runtime.RequestHandler;
 import com.amazonaws.services.lambda.runtime.events.SNSEvent;
@@ -52,6 +60,22 @@ public class LogEvent implements RequestHandler<SNSEvent, Object> {
 
         timeStamp = new SimpleDateFormat("yyyy-MM-dd_HH:mm:ss").format(Calendar.getInstance().getTime());
         context.getLogger().log("Invocation completed: " + timeStamp);
+
+        context.getLogger().log("Invalidation started: " + timeStamp);
+
+        context.getLogger().log("[DEBUG] 1) Credentials created");
+        AmazonCloudFrontClient client = new AmazonCloudFrontClient(new EnvironmentVariableCredentialsProvider());
+        context.getLogger().log("[DEBUG] 2) Client created");
+        Paths invalidation_paths = new Paths().withItems("/records/*", "/records").withQuantity(2);
+        context.getLogger().log("[DEBUG] 3) Invalidations path created");
+        InvalidationBatch invalidation_batch = new InvalidationBatch(invalidation_paths, String.valueOf(System.currentTimeMillis()));
+        context.getLogger().log("[DEBUG] 4) Invalidation batch set");
+        CreateInvalidationRequest invalidation = new CreateInvalidationRequest("EXTJYVM2DAM9O", invalidation_batch);
+        context.getLogger().log("[DEBUG] 5) Request created");
+        CreateInvalidationResult ret = client.createInvalidation(invalidation);
+        context.getLogger().log("[DEBUG] 6) Call done:" + ret.getInvalidation().getStatus());
+
+        context.getLogger().log("Invalidation completed: " + timeStamp);
 
         return null;
     }
